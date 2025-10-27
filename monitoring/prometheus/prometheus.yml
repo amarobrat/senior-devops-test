@@ -1,0 +1,83 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'devops-test-monitor'
+    environment: 'production'
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  # Node Exporter - System metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 5s
+
+  # cAdvisor - Container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 5s
+
+  # Nginx Exporter - Web server metrics
+  - job_name: 'nginx-exporter'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 5s
+
+  # Blackbox Exporter - HTTP endpoint monitoring
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://localhost        # WordPress site
+        - http://localhost/wp-admin/admin-ajax.php  # WordPress health check
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # WordPress Database monitoring (if MySQL exporter is available)
+  - job_name: 'mysql-exporter'
+    static_configs:
+      - targets: ['mysql-exporter:9104']
+    scrape_interval: 30s
+
+  # Custom WordPress metrics endpoint (if implemented)
+  - job_name: 'wordpress-metrics'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: /wp-content/plugins/wp-prometheus/metrics
+    scrape_interval: 30s
+
+  # GCP monitoring integration (if available)
+  - job_name: 'gcp-compute'
+    gce_sd_configs:
+      - project: 'your-gcp-project'
+        zone: 'us-central1-a'
+        port: 9100
+    relabel_configs:
+      - source_labels: [__meta_gce_instance_name]
+        target_label: instance
+      - source_labels: [__meta_gce_project]
+        target_label: project
